@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hanzi Worksheet Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- RESET & BASICS --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #eef0f4;
+            color: #1a1a1a;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; 
+        }
+
+        /* --- HEADER & SIDEBAR --- */
+        header {
+            background: #fff;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        .brand { font-family: 'Noto Serif SC', serif; font-weight: 700; font-size: 1.25rem; }
+        
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #fff;
+            border-right: 1px solid #ddd;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            flex-shrink: 0;
+            z-index: 5;
+            overflow-y: auto;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+        }
+
+        .input-wrapper { position: relative; }
+        
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 0.75rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.5rem;
+            border: 2px solid #eee;
+            border-radius: 8px;
+            resize: none;
+            transition: border-color 0.2s;
+        }
+        textarea:focus { outline: none; border-color: #333; }
+
+        .counter {
+            text-align: right;
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 0.25rem;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.85rem;
+            background: #1a1a1a;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn:hover { background: #000; }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        /* --- PREVIEW AREA --- */
+        .preview-area {
+            flex: 1;
+            background: #eef0f4;
+            padding: 2rem;
+            overflow: auto;
+            /* CENTER THE SHEET BY DEFAULT */
+            display: flex;
+            align-items: center; 
+            justify-content: center; 
+        }
+
+        /* THE A4 SHEET WRAPPER */
+        .sheet-container {
+            /* Transform origin center ensures it shrinks into the middle, not top-left */
+            transform-origin: center center; 
+            transition: transform 0.2s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            /* Important: We set explicit width/height in JS to match scaled size */
+            flex-shrink: 0; 
+        }
+
+        .sheet {
+            width: 210mm;
+            height: 296mm; /* A4 Height */
+            background: white;
+            padding: 12mm 15mm; 
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-sizing: border-box;
+            /* Ensure the content stays 210x297mm internally regardless of container scaling */
+            transform-origin: top left;
+        }
+
+        /* --- WORKSHEET CONTENT --- */
+        .ws-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .ws-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 24pt;
+            font-weight: 900;
+            letter-spacing: 2px;
+        }
+        .ws-meta {
+            text-align: right;
+            font-size: 10pt;
+            color: #444;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .meta-line {
+            border-bottom: 1px solid #999;
+            display: inline-block;
+            width: 100px;
+            margin-left: 5px;
+        }
+
+        .quote-box {
+            background: #f8f8f8;
+            border-left: 4px solid #333;
+            padding: 8px 15px;
+            margin-bottom: 20px;
+            font-family: 'Noto Serif SC', serif;
+        }
+        .quote-cn { font-size: 12pt; font-weight: bold; color: #000; }
+        .quote-en { font-size: 9pt; color: #666; font-style: italic; margin-top: 2px; }
+
+        /* THE GRID */
+        .grid-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* Distribute rows evenly */
+        }
+
+        .char-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between; /* Spread cells across full width */
+            gap: 2mm; 
+            height: 18mm;
+        }
+
+        .cell {
+            width: 18mm;
+            height: 18mm;
+            border: 1px solid #333;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+
+        /* Rice Grid Lines (米) */
+        .cell::before, .cell::after {
+            content: '';
+            position: absolute;
+            background: transparent;
+            z-index: 0;
+        }
+        /* Horizontal dotted line */
+        .cell::before { 
+            top: 50%; left: 0; right: 0; height: 1px; 
+            border-top: 1px dashed #ccc; 
+        }
+        /* Vertical dotted line */
+        .cell::after { 
+            left: 50%; top: 0; bottom: 0; width: 1px; 
+            border-left: 1px dashed #ccc; 
+        }
+        
+        /* Diagonal lines */
+        .cell-diag-1 {
+            position: absolute; width: 142%; height: 1px; border-top: 1px dotted #ccc;
+            transform: rotate(45deg); z-index: 0;
+            pointer-events: none;
+        }
+        .cell-diag-2 {
+            position: absolute; width: 142%; height: 1px; border-top: 1px dotted #ccc;
+            transform: rotate(-45deg); z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Character Styles */
+        .char-content {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 19pt;
+            z-index: 1;
+            line-height: 1;
+        }
+
+        .cell.master .char-content {
+            font-weight: 700;
+            color: #000;
+        }
+
+        .cell.trace .char-content {
+            font-weight: 400;
+            color: #d1d1d1;
+        }
+
+        .ws-footer {
+            margin-top: 15px;
+            border-top: 1px solid #ccc;
+            padding-top: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .footer-main {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8pt;
+            color: #888;
+        }
+        .footer-note {
+            font-size: 6pt;
+            color: #b0b0b6;
+            opacity: 0.7;
+            text-align: right;
+            font-style: italic;
+        }
+
+        /* --- MOBILE/RESPONSIVE --- */
+        @media (max-width: 850px) {
+            body { flex-direction: column; overflow: auto; height: auto; }
+            .main-container { flex-direction: column; overflow: visible; }
+            .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #ddd; }
+            .preview-area { padding: 1rem; min-height: 500px; display: flex; align-items: center; justify-content: center; }
+        }
+
+        /* --- PRINT MODIFIER --- */
+        @media print {
+            body * { visibility: hidden; }
+            .sheet, .sheet * { visibility: visible; }
+            .sheet {
+                position: absolute;
+                left: 0;
+                top: 0;
+                margin: 0;
+                padding: 12mm 15mm !important;
+                box-shadow: none;
+                width: 210mm !important;
+                height: 296mm !important;
+                transform: none !important; /* Reset any scaling for print */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">子默 · Hanzi Practice</div>
+        <a href="#" style="text-decoration:none; color:#1a1a1a; font-size:0.9rem;">v2.2</a>
+    </header>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <div class="control-group">
+                <label>Characters (Max 10)</label>
+                <div class="input-wrapper">
+                    <textarea id="charInput" placeholder="Paste Chinese characters here...">你我好世界</textarea>
+                    <div class="counter" id="charCounter">5/10</div>
+                </div>
+            </div>
+            
+            <button class="btn" id="downloadBtn">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Download PDF
+            </button>
+
+            <div style="font-size: 0.8rem; color: #666; line-height: 1.4;">
+                <p><strong>Tip:</strong> The generator automatically creates 10 rows. The first box is the master copy, followed by tracing guides.</p>
+            </div>
+        </aside>
+
+        <main class="preview-area" id="previewArea">
+            <div class="sheet-container" id="sheetContainer">
+                <div class="sheet" id="printableSheet">
+                    <div class="ws-header">
+                        <div class="ws-title">汉字练习</div>
+                        <div class="ws-meta">
+                            <div>Name: <span class="meta-line"></span></div>
+                            <div>Date: <span class="meta-line"></span></div>
+                        </div>
+                    </div>
+
+                    <div class="quote-box">
+                        <div class="quote-cn" id="quoteCn">学无止境</div>
+                        <div class="quote-en" id="quoteEn">Learning has no limits.</div>
+                    </div>
+
+                    <div class="grid-container" id="gridTarget">
+                        </div>
+
+                    <div class="ws-footer">
+                        <div class="footer-main">
+                            <div>Practice makes perfect.</div>
+                            <div>Generated by 子默</div>
+                        </div>
+                        <div class="footer-note">
+                            (Not suitable for patriots who skip class to watch cricket)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        class HanziGenerator {
+            constructor() {
+                this.MAX_ROWS = 10;
+                this.CELLS_PER_ROW = 9; // Number of boxes per row
+                
+                this.quotes = [
+                    { cn: "学无止境", en: "Learning never ends." },
+                    { cn: "熟能生巧", en: "Practice makes perfect." },
+                    { cn: "千里之行，始于足下", en: "A journey of a thousand miles begins with a single step." },
+                    { cn: "温故而知新", en: "Review the old to learn the new." },
+                    { cn: "锲而不舍", en: "Perseverance prevails." }
+                ];
+
+                // DOM Elements
+                this.input = document.getElementById('charInput');
+                this.counter = document.getElementById('charCounter');
+                this.grid = document.getElementById('gridTarget');
+                this.btn = document.getElementById('downloadBtn');
+                this.sheetContainer = document.getElementById('sheetContainer');
+                this.sheet = document.getElementById('printableSheet');
+                this.previewArea = document.getElementById('previewArea');
+
+                this.init();
+            }
+
+            init() {
+                // Event Listeners
+                this.input.addEventListener('input', () => this.handleInput());
+                this.btn.addEventListener('click', () => this.download());
+                window.addEventListener('resize', () => this.scalePreview());
+
+                // Initial Render
+                this.handleInput();
+                this.updateQuote();
+                
+                // Slight delay to ensure DOM is ready for sizing
+                setTimeout(() => this.scalePreview(), 50);
+            }
+
+            handleInput() {
+                // Filter for Chinese chars only, take max 10
+                const rawText = this.input.value;
+                const chars = (rawText.match(/[\u4e00-\u9fa5]/g) || []).slice(0, this.MAX_ROWS);
+                
+                // Update Counter
+                this.counter.textContent = `${chars.length}/${this.MAX_ROWS}`;
+                
+                this.renderGrid(chars);
+            }
+
+            updateQuote() {
+                const q = this.quotes[Math.floor(Math.random() * this.quotes.length)];
+                document.getElementById('quoteCn').textContent = q.cn;
+                document.getElementById('quoteEn').textContent = q.en;
+            }
+
+            renderGrid(chars) {
+                let html = '';
+
+                // Always render MAX_ROWS for consistent layout
+                for (let i = 0; i < this.MAX_ROWS; i++) {
+                    const char = chars[i] || ''; // If no char, it's an empty row
+                    html += `
+                    <div class="char-row">
+                        ${this.generateCells(char)}
+                    </div>`;
+                }
+
+                this.grid.innerHTML = html;
+            }
+
+            generateCells(char) {
+                let cells = '';
+                // Generate boxes
+                for (let j = 0; j < this.CELLS_PER_ROW; j++) {
+                    const isMaster = j === 0; // First box is master
+                    let cellClass = isMaster ? 'master' : 'trace';
+                    
+                    // If no character exists for this row, just empty cells
+                    if (!char) cellClass = 'empty';
+
+                    const content = char ? `<span class="char-content">${char}</span>` : '';
+                    
+                    cells += `
+                        <div class="cell ${cellClass}">
+                            <div class="cell-diag-1"></div>
+                            <div class="cell-diag-2"></div>
+                            ${content}
+                        </div>
+                    `;
+                }
+                return cells;
+            }
+
+            scalePreview() {
+                // Logic to fit A4 paper into the screen
+                const containerWidth = this.previewArea.clientWidth;
+                // A4 dimensions in pixels at approx 96 DPI
+                const SHEET_WIDTH_PX = 794; 
+                const SHEET_HEIGHT_PX = 1123;
+                
+                // Padding buffer (40px)
+                const availableWidth = containerWidth - 40;
+                
+                // Calculate Scale
+                let scale = availableWidth / SHEET_WIDTH_PX;
+                
+                // Clamp scale
+                if (scale > 1) scale = 1; 
+                if (scale < 0.3) scale = 0.3; 
+
+                // Apply Scale to the Sheet Element (Inner)
+                // We use the inner element for scaling so the outer container can just wrap it nicely
+                this.sheet.style.transform = `scale(${scale})`;
+                this.sheet.style.transformOrigin = 'top left';
+
+                // Resize the Container to match the Scaled size
+                // This is CRITICAL for Flexbox centering. 
+                // The container shrinks to exactly the visual size of the sheet.
+                this.sheetContainer.style.width = `${SHEET_WIDTH_PX * scale}px`;
+                this.sheetContainer.style.height = `${SHEET_HEIGHT_PX * scale}px`;
+            }
+
+            download() {
+                const element = document.getElementById('printableSheet');
+                const btnOldText = this.btn.innerHTML;
+                
+                this.btn.disabled = true;
+                this.btn.textContent = 'Generating...';
+
+                // Temporarily remove scale for clean high-res print
+                const originalTransform = element.style.transform;
+                element.style.transform = 'none';
+
+                const opt = {
+                    margin:       0,
+                    filename:     'hanzi-worksheet.pdf',
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                html2pdf().set(opt).from(element).save().then(() => {
+                    // Restore preview scale
+                    element.style.transform = originalTransform;
+                    this.btn.disabled = false;
+                    this.btn.innerHTML = btnOldText;
+                });
+            }
+        }
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', () => {
+            new HanziGenerator();
+        });
+    </script>
+</body>
+</html>
